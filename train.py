@@ -57,7 +57,7 @@ def train(args, io):
             dataset_stride=1,
             use_fps=args.use_fps,
             apply_jitter=False,  # Enforce safety
-            apply_anisotropic_scale=False # Enforce safety
+            apply_anisotropic_scale=False  # Enforce safety
         ),
         num_workers=8, batch_size=args.test_batch_size, shuffle=False, drop_last=False)
 
@@ -109,6 +109,8 @@ def train(args, io):
     criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
 
     best_test_acc = 0
+    global_step = 0  # <--- Initialize Global Step Tracker
+
     for epoch in range(args.epochs):
         # --- Train ---
         train_loss = 0.0
@@ -134,6 +136,14 @@ def train(args, io):
 
             loss.backward()
             opt.step()
+
+            global_step += 1  # <--- Increment Global Step Tracker
+
+            # <--- Log Step-Level Metrics
+            wandb.log({
+                "train/step_loss": loss.item(),
+                "global_step": global_step
+            })
 
             preds = logits.max(dim=1)[1]
             count += batch_size
@@ -276,10 +286,13 @@ if __name__ == "__main__":
                         help='Model to use')
 
     # --- Data Processing & Augmentation Args ---
-    parser.add_argument('--dataset_stride', type=int, default=1, help='Subsample the dataset by taking every Nth pointcloud')
-    parser.add_argument('--use_fps', action='store_true', help='Use Farthest Point Sampling instead of stride-based downsampling')
+    parser.add_argument('--dataset_stride', type=int, default=1,
+                        help='Subsample the dataset by taking every Nth pointcloud')
+    parser.add_argument('--use_fps', action='store_true',
+                        help='Use Farthest Point Sampling instead of stride-based downsampling')
     parser.add_argument('--apply_jitter', action='store_true', help='Apply random jitter augmentation to train data')
-    parser.add_argument('--apply_scale', action='store_true', help='Apply anisotropic scaling augmentation to train data')
+    parser.add_argument('--apply_scale', action='store_true',
+                        help='Apply anisotropic scaling augmentation to train data')
 
     # --- Transformer Hyperparameters ---
     parser.add_argument('--trans_dim', type=int, default=216, help='Transformer embedding dimension')
@@ -317,8 +330,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     wandb.init(project="yon_canon", name=args.exp_name, config=vars(args))
+
+    # <--- DEFINED METRICS FOR BOTH EPOCH AND STEP LOGGING --->
     wandb.define_metric("epoch")
-    wandb.define_metric("*", step_metric="epoch")
+    wandb.define_metric("global_step")
+    wandb.define_metric("train/step_loss", step_metric="global_step")
+    wandb.define_metric("train/loss", step_metric="epoch")
+    wandb.define_metric("train/acc", step_metric="epoch")
+    wandb.define_metric("train/avg_acc", step_metric="epoch")
+    wandb.define_metric("test/*", step_metric="epoch")
+    wandb.define_metric("lr", step_metric="epoch")
 
     _init_(args)
 
