@@ -35,11 +35,31 @@ def _init_(args):
 
 
 def train(args, io):
-    train_loader = DataLoader(OrderedModelNet40(partition='train', num_points=args.num_points, ordering=args.ordering),
-                              num_workers=8, batch_size=args.batch_size, shuffle=True, drop_last=True)
+    # --- Updated Train DataLoader ---
+    train_loader = DataLoader(
+        OrderedModelNet40(
+            partition='train',
+            num_points=args.num_points,
+            ordering=args.ordering,
+            dataset_stride=args.dataset_stride,
+            use_fps=args.use_fps,
+            apply_jitter=args.apply_jitter,
+            apply_anisotropic_scale=args.apply_scale
+        ),
+        num_workers=8, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
-    test_loader = DataLoader(OrderedModelNet40(partition='test', num_points=args.num_points, ordering=args.ordering),
-                             num_workers=8, batch_size=args.test_batch_size, shuffle=False, drop_last=False)
+    # --- Updated Test DataLoader ---
+    test_loader = DataLoader(
+        OrderedModelNet40(
+            partition='test',
+            num_points=args.num_points,
+            ordering=args.ordering,
+            dataset_stride=1,
+            use_fps=args.use_fps,
+            apply_jitter=False,  # Enforce safety
+            apply_anisotropic_scale=False # Enforce safety
+        ),
+        num_workers=8, batch_size=args.test_batch_size, shuffle=False, drop_last=False)
 
     device = torch.device("cuda" if args.cuda else "cpu")
 
@@ -48,7 +68,10 @@ def train(args, io):
         model = GlobalMLPClassifier(
             num_classes=40,
             num_points=args.num_points,
-            num_bands=args.num_bands
+            num_bands=args.num_bands,
+            fourier_scale=args.fourier_scale,
+            dropout=args.dropout,
+            ordering_type=args.ordering
         ).to(device)
     elif args.model == 'point_transformer':
         model = PointTransformerClassifier(
@@ -63,6 +86,7 @@ def train(args, io):
         raise Exception(f"Model {args.model} not implemented")
 
     model = nn.DataParallel(model)
+
     print("Let's use", torch.cuda.device_count(), "GPUs!")
 
     opt_choice = 'sgd' if args.use_sgd else args.optimizer.lower()
@@ -97,7 +121,6 @@ def train(args, io):
         for data, label in train_bar:
             data, label = data.to(device), label.to(device).squeeze()
 
-            # The models now expect (B, N, 3). NO permuting!
             batch_size = data.size()[0]
 
             opt.zero_grad()
@@ -182,8 +205,18 @@ def train(args, io):
 
 
 def test(args, io):
-    test_loader = DataLoader(OrderedModelNet40(partition='test', num_points=args.num_points, ordering=args.ordering),
-                             num_workers=8, batch_size=args.test_batch_size, shuffle=False, drop_last=False)
+    # --- Updated Eval DataLoader ---
+    test_loader = DataLoader(
+        OrderedModelNet40(
+            partition='test',
+            num_points=args.num_points,
+            ordering=args.ordering,
+            dataset_stride=1,
+            use_fps=args.use_fps,
+            apply_jitter=False,
+            apply_anisotropic_scale=False
+        ),
+        num_workers=8, batch_size=args.test_batch_size, shuffle=False, drop_last=False)
 
     device = torch.device("cuda" if args.cuda else "cpu")
 
@@ -191,7 +224,10 @@ def test(args, io):
         model = GlobalMLPClassifier(
             num_classes=40,
             num_points=args.num_points,
-            num_bands=args.num_bands
+            num_bands=args.num_bands,
+            fourier_scale=args.fourier_scale,
+            dropout=args.dropout,
+            ordering_type=args.ordering
         ).to(device)
     elif args.model == 'point_transformer':
         model = PointTransformerClassifier(
@@ -234,10 +270,16 @@ if __name__ == "__main__":
     parser.add_argument('--exp_name', type=str, default='exp', metavar='N', help='Name of the experiment')
 
     # --- New Core Arguments ---
-    parser.add_argument('--ordering', type=str, default='lex', choices=['lex', 'hilbert'],
+    parser.add_argument('--ordering', type=str, default='ply', choices=['lex', 'hilbert', 'ply'],
                         help='Which canonical dataset to load')
-    parser.add_argument('--model', type=str, default='point_transformer', choices=['global_mlp', 'point_transformer'],
+    parser.add_argument('--model', type=str, default='global_mlp', choices=['global_mlp', 'point_transformer'],
                         help='Model to use')
+
+    # --- Data Processing & Augmentation Args ---
+    parser.add_argument('--dataset_stride', type=int, default=1, help='Subsample the dataset by taking every Nth pointcloud')
+    parser.add_argument('--use_fps', action='store_true', help='Use Farthest Point Sampling instead of stride-based downsampling')
+    parser.add_argument('--apply_jitter', action='store_true', help='Apply random jitter augmentation to train data')
+    parser.add_argument('--apply_scale', action='store_true', help='Apply anisotropic scaling augmentation to train data')
 
     # --- Transformer Hyperparameters ---
     parser.add_argument('--trans_dim', type=int, default=216, help='Transformer embedding dimension')
@@ -247,6 +289,8 @@ if __name__ == "__main__":
 
     # --- Global MLP Hyperparameters ---
     parser.add_argument('--num_bands', type=int, default=4, help='Number of Fourier bands for Global MLP')
+    parser.add_argument('--fourier_scale', type=float, default=10.0,
+                        help='Scale for Random Fourier Features')
 
     # --- Standard Hyperparameters ---
     parser.add_argument('--batch_size', type=int, default=32, metavar='batch_size', help='Size of batch')
@@ -272,7 +316,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    wandb.init(project="modelnet40-canon", name=args.exp_name, config=vars(args))
+    wandb.init(project="yon_canon", name=args.exp_name, config=vars(args))
     wandb.define_metric("epoch")
     wandb.define_metric("*", step_metric="epoch")
 
