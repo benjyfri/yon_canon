@@ -30,34 +30,42 @@ ORD_IDX=$((IDX / 5))
 CURRENT_STRIDE=${STRIDES[$STRIDE_IDX]}
 CURRENT_ORD=${ORDERINGS[$ORD_IDX]}
 
+# --- OPTION B: Scale Epochs based on Stride ---
+BASE_EPOCHS=100
+SCALED_EPOCHS=$((BASE_EPOCHS * CURRENT_STRIDE))
+
 # 3. Load the best hyperparameters for the selected ordering
 if [ "$CURRENT_ORD" == "ply" ]; then
-    LR=0.0014988353560536768
-    DROPOUT=0.1
+    LR=0.0016280487528370058
+    DROPOUT=0.3
     WD=0.05
     F_SCALE=1.0
     LS=0.1
+    NUM_BANDS=2
 elif [ "$CURRENT_ORD" == "lex" ]; then
     LR=0.0006407203395820919
     DROPOUT=0.1
     WD=0.05
     F_SCALE=0.1
     LS=0.2
+    NUM_BANDS=3
 elif [ "$CURRENT_ORD" == "hilbert" ]; then
     LR=0.0009614328324244756
     DROPOUT=0.3
     WD=0.01
     F_SCALE=0.1
     LS=0.2
+    NUM_BANDS=3
 fi
 
 # Set a dynamic experiment name for W&B
-EXP_NAME="ablation_${CURRENT_ORD}_stride_${CURRENT_STRIDE}"
+EXP_NAME="ablation_${CURRENT_ORD}_stride_${CURRENT_STRIDE}_noPerm"
 
 echo "================================================================="
 echo "Starting Job ID: $SLURM_ARRAY_TASK_ID"
 echo "Ordering: $CURRENT_ORD | Stride: $CURRENT_STRIDE (1/${CURRENT_STRIDE} of data)"
-echo "Hyperparameters -> LR: $LR, Dropout: $DROPOUT, Weight Decay: $WD"
+echo "Hyperparameters -> LR: $LR, Dropout: $DROPOUT, Weight Decay: $WD, Bands: $NUM_BANDS"
+echo "Epochs: $BASE_EPOCHS base * $CURRENT_STRIDE stride = $SCALED_EPOCHS total epochs"
 echo "================================================================="
 
 # 4. Execute the training script
@@ -67,14 +75,14 @@ python train.py \
     --dataset "modelnet40" \
     --model "global_mlp" \
     --ordering "$CURRENT_ORD" \
-    --epochs 100 \
+    --epochs $SCALED_EPOCHS \
     --batch_size 256 \
     --test_batch_size 16 \
     --optimizer "adamw" \
     --lr $LR \
     --dropout $DROPOUT \
     --weight_decay $WD \
-    --num_bands 3 \
+    --num_bands $NUM_BANDS \
     --fourier_scale $F_SCALE \
     --label_smoothing $LS \
     --dataset_stride $CURRENT_STRIDE \

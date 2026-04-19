@@ -6,11 +6,27 @@ import glob
 import h5py
 import numpy as np
 from torch.utils.data import Dataset
+from scipy.spatial.transform import Rotation
 
 
 def augment_anisotropic_scale(pointcloud):
     scales = np.random.uniform(0.8, 1.2, size=(3,)).astype(np.float32)
     return pointcloud * scales
+
+
+def augment_so3_rotation(pointcloud):
+    """
+    Centers the point cloud and applies a uniformly sampled
+    random proper rotation (SO(3)).
+    """
+    # 1. Center the point cloud at the origin
+    pointcloud = pointcloud - np.mean(pointcloud, axis=0, keepdims=True)
+
+    # 2. Generate random SO(3) matrix
+    R = Rotation.random().as_matrix().astype(np.float32)
+
+    # 3. Apply rotation
+    return np.dot(pointcloud, R)
 
 
 def farthest_point_sample(xyz, npoint):
@@ -35,7 +51,7 @@ def farthest_point_sample(xyz, npoint):
 
 
 def load_ordered_data(partition, data_root="data"):
-    dataset_name = f"modelnet40_ply_hdf5_2048"
+    dataset_name = "modelnet40_ply_hdf5_2048"
     dataset_dir = os.path.join(data_root, dataset_name)
 
     if not os.path.exists(dataset_dir):
@@ -65,8 +81,9 @@ def load_ordered_data(partition, data_root="data"):
 
 class OrderedModelNet40(Dataset):
     def __init__(self, num_points, partition='train', ordering='lex', data_root='data',
-                 jitter_sigma=0.02, jitter_clip=0.04, dataset_stride=1, use_fps=True,
-                 apply_jitter=False, apply_anisotropic_scale=False):
+                 jitter_sigma=0.02, jitter_clip=0.04, dataset_stride=1, use_fps=False,
+                 apply_jitter=False, apply_anisotropic_scale=False,
+                 apply_random_permutation=False, apply_rotation=False):
         """
         Dataloader for Point Clouds.
         """
@@ -77,6 +94,8 @@ class OrderedModelNet40(Dataset):
         # Augmentation parameters & toggles
         self.apply_jitter = apply_jitter
         self.apply_anisotropic_scale = apply_anisotropic_scale
+        self.apply_random_permutation = apply_random_permutation
+        self.apply_rotation = apply_rotation
         self.jitter_sigma = jitter_sigma
         self.jitter_clip = jitter_clip
 
@@ -129,6 +148,10 @@ class OrderedModelNet40(Dataset):
             stride = pointcloud.shape[0] // self.num_points
             pointcloud = pointcloud[::stride][:self.num_points]
 
+        # --- Apply Strict SO(3) Rotation (Applied to Train AND Test if toggled) ---
+        if self.apply_rotation:
+            pointcloud = augment_so3_rotation(pointcloud)
+
         # --- Apply Requested Augmentations (Train Only) ---
         if self.partition == 'train':
             # 1. Anisotropic Scale
@@ -140,9 +163,11 @@ class OrderedModelNet40(Dataset):
                 noise = np.random.normal(0, self.jitter_sigma, size=pointcloud.shape).astype(np.float32)
                 noise = np.clip(noise, -self.jitter_clip, self.jitter_clip)
                 pointcloud += noise
-        # --- Random Permutation (Always) ---
-        perm = np.random.permutation(self.num_points)
-        pointcloud = pointcloud[perm]
+
+        # --- Random Permutation ---
+        if self.apply_random_permutation:
+            perm = np.random.permutation(self.num_points)
+            pointcloud = pointcloud[perm]
 
         return pointcloud, label
 
@@ -151,8 +176,7 @@ class OrderedModelNet40(Dataset):
 
 
 if __name__ == '__main__':
-    # Quick sanity check with augmentations turned on
-    print("Testing Train Partition with Augmentations...")
+    print("Testing Train Partition with Full SO(3) Rotations...")
     train = OrderedModelNet40(
         1024,
         partition='train',
@@ -160,7 +184,9 @@ if __name__ == '__main__':
         dataset_stride=3,
         use_fps=True,
         apply_jitter=True,
-        apply_anisotropic_scale=True
+        apply_anisotropic_scale=True,
+        apply_random_permutation=True,
+        apply_rotation=True
     )
 
     for data, label in train:

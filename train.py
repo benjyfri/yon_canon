@@ -20,6 +20,18 @@ from util import IOStream
 import wandb
 
 
+# --- NEW: Bulletproof Boolean Parser for WandB Sweeps ---
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def _init_(args):
     if not os.path.exists('checkpoints'):
         os.makedirs('checkpoints')
@@ -44,7 +56,9 @@ def train(args, io):
             dataset_stride=args.dataset_stride,
             use_fps=args.use_fps,
             apply_jitter=args.apply_jitter,
-            apply_anisotropic_scale=args.apply_scale
+            apply_anisotropic_scale=args.apply_scale,
+            apply_random_permutation=args.apply_random_permutation,
+            apply_rotation=args.apply_rotation  # <-- NEW
         ),
         num_workers=8, batch_size=args.batch_size, shuffle=True, drop_last=True)
 
@@ -57,7 +71,9 @@ def train(args, io):
             dataset_stride=1,
             use_fps=args.use_fps,
             apply_jitter=False,  # Enforce safety
-            apply_anisotropic_scale=False  # Enforce safety
+            apply_anisotropic_scale=False,  # Enforce safety
+            apply_random_permutation=False,  # Enforce safety
+            apply_rotation=False  # <-- NEW (Enforce safety)
         ),
         num_workers=8, batch_size=args.test_batch_size, shuffle=False, drop_last=False)
 
@@ -166,7 +182,8 @@ def train(args, io):
             "epoch": epoch,
             "train/loss": train_loss * 1.0 / count,
             "train/acc": train_acc,
-            "train/avg_acc": train_avg_acc
+            "train/avg_acc": train_avg_acc,
+            "global_step": global_step
         })
 
         # --- Test ---
@@ -224,7 +241,9 @@ def test(args, io):
             dataset_stride=1,
             use_fps=args.use_fps,
             apply_jitter=False,
-            apply_anisotropic_scale=False
+            apply_anisotropic_scale=False,
+            apply_random_permutation=False,
+            apply_rotation=False  # <-- NEW (Enforce safety)
         ),
         num_workers=8, batch_size=args.test_batch_size, shuffle=False, drop_last=False)
 
@@ -279,20 +298,26 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Pre-ordered Point Cloud Recognition')
     parser.add_argument('--exp_name', type=str, default='exp', metavar='N', help='Name of the experiment')
 
-    # --- New Core Arguments ---
-    parser.add_argument('--ordering', type=str, default='ply', choices=['lex', 'hilbert', 'ply'],
+    parser.add_argument('--ordering', type=str, default='ply', choices=['lex', 'hilbert', 'ply', 'pca'],
                         help='Which canonical dataset to load')
     parser.add_argument('--model', type=str, default='global_mlp', choices=['global_mlp', 'point_transformer'],
                         help='Model to use')
 
-    # --- Data Processing & Augmentation Args ---
+    # --- Data Processing & Augmentation Args (REVISED FOR WANDB) ---
     parser.add_argument('--dataset_stride', type=int, default=1,
                         help='Subsample the dataset by taking every Nth pointcloud')
-    parser.add_argument('--use_fps', action='store_true',
+    parser.add_argument('--use_fps', type=str2bool, nargs='?', const=True, default=False,
                         help='Use Farthest Point Sampling instead of stride-based downsampling')
-    parser.add_argument('--apply_jitter', action='store_true', help='Apply random jitter augmentation to train data')
-    parser.add_argument('--apply_scale', action='store_true',
+    parser.add_argument('--apply_jitter', type=str2bool, nargs='?', const=True, default=False,
+                        help='Apply random jitter augmentation to train data')
+    parser.add_argument('--apply_scale', type=str2bool, nargs='?', const=True, default=False,
                         help='Apply anisotropic scaling augmentation to train data')
+    parser.add_argument('--apply_random_permutation', type=str2bool, nargs='?', const=True, default=False,
+                        help='Apply random permutation to point ordering during training')
+
+    # --- NEW: Added random rotation toggle ---
+    parser.add_argument('--apply_rotation', type=str2bool, nargs='?', const=True, default=False,
+                        help='Apply random rotation augmentation to train data')
 
     # --- Transformer Hyperparameters ---
     parser.add_argument('--trans_dim', type=int, default=216, help='Transformer embedding dimension')
@@ -311,7 +336,8 @@ if __name__ == "__main__":
     parser.add_argument('--epochs', type=int, default=250, metavar='N', help='number of episodes to train')
     parser.add_argument('--optimizer', type=str, default='adamw', choices=['adam', 'adamw', 'sgd'],
                         help='Optimizer to use')
-    parser.add_argument('--use_sgd', action='store_true', help='Use SGD (Default is Adam)')
+    parser.add_argument('--use_sgd', type=str2bool, nargs='?', const=True, default=False,
+                        help='Use SGD (Default is Adam)')
     parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
     parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay for the optimizer')
@@ -322,14 +348,14 @@ if __name__ == "__main__":
     # --- System ---
     parser.add_argument('--dataset', type=str, default='modelnet40', choices=['modelnet40'])
     parser.add_argument('--num_points', type=int, default=1024, help='num of points to use')
-    parser.add_argument('--eval', action='store_true', help='evaluate the model')
-    parser.add_argument('--no_cuda', action='store_true', help='enables CUDA training')
+    parser.add_argument('--eval', type=str2bool, nargs='?', const=True, default=False, help='evaluate the model')
+    parser.add_argument('--no_cuda', type=str2bool, nargs='?', const=True, default=False, help='enables CUDA training')
     parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
     parser.add_argument('--model_path', type=str, default='', metavar='N', help='Pretrained model path')
 
     args = parser.parse_args()
 
-    wandb.init(project="yon_canon", name=args.exp_name, config=vars(args))
+    wandb.init(project="yon_canon_new", name=args.exp_name, config=vars(args))
 
     # <--- DEFINED METRICS FOR BOTH EPOCH AND STEP LOGGING --->
     wandb.define_metric("epoch")

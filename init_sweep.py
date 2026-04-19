@@ -17,7 +17,7 @@ def create_sweep(ordering, project, entity):
         },
         'parameters': {
             # Give runs indicative prefix names (e.g., lex_run_1, hilbert_run_2)
-            'exp_name': {'value': f'pt_rope_{ordering}'},
+            'exp_name': {'value': f'pt_rope_{ordering}_noPerm'},
             'model': {'value': 'point_transformer'},
 
             # --- LOCKED TO THE SPECIFIC ORDERING ---
@@ -56,16 +56,19 @@ def main():
     # Create both sweeps
     lex_id = create_sweep('lex', project, entity)
     hilbert_id = create_sweep('hilbert', project, entity)
+    ply_id = create_sweep('ply', project, entity)
 
     print("\n" + "=" * 65)
     print("✅ SWEEPS CREATED SUCCESSFULLY!")
     print(f"👉 LEXICOGRAPHICAL Sweep ID : {lex_id}")
     print(f"👉 HILBERT CURVE Sweep ID   : {hilbert_id}")
+    print(f"👉 Regular Sweep ID   : {ply_id}")
     print("=" * 65 + "\n")
 
     print("To launch your Slurm workers, use:")
     print(f"sbatch --job-name=lex_sweep run_sweep.sbatch {lex_id}")
     print(f"sbatch --job-name=hilb_sweep run_sweep.sbatch {hilbert_id}\n")
+    print(f"sbatch --job-name=clean_sweep run_sweep.sbatch {ply_id}\n")
 
 
 if __name__ == "__main__":
