@@ -1,50 +1,15 @@
-# yon_canon: 1D Point Cloud Canonicalization 
+# ModelNet40 Canonicalization Experiments
 
-This repository explores how strict 1D orderings (Lexicographical and Hilbert curves) impact sequence-based point cloud classification. 
+This repository contains the code and experimental setup for studying the effects of point cloud canonicalization on the ModelNet40 dataset. The project evaluates canonicalization techniques using a global MLP and conducts a comprehensive rotation study across various frame-alignment models.
 
-By canonicalizing unorganized 3D point clouds into strict 1D sequences, we bypass the need for expensive spatial neighborhood calculations. Instead, we can feed the ordered points directly into standard sequence models, leveraging efficient techniques like 1D Rotary Position Embeddings (RoPE).
+## 📂 Data Preparation
 
-## 📁 Project Structure
+Before running the experiments, ensure you have downloaded the **ModelNet40** dataset in HDF5 format. The data should be extracted and placed in the following directory: `~/data/modelnet40_ply_hdf5_2048/`.
 
-* **`create_data.py`**: The heavy-lifter for data preprocessing. Reads raw ModelNet40 `.h5` files, normalizes the 3D coordinates, computes the sorting indices (Lexicographical and Hilbert), and saves them as pre-ordered datasets.
-* **`check_data.py`**: A Plotly visualization script to inspect the orderings. Generates interactive HTML plots (like `guitar_ordering_comparison.html` and `table_ordering_comparison.html`) to visually verify the 1D gradient sweeps.
-* **`data.py`**: Contains the `OrderedModelNet40` PyTorch Dataset class. It dynamically loads either the `lex` or `hilbert` pre-ordered data without applying random shuffling or rotations that would break the sequence.
-* **`models.py`**: Contains the neural network architectures:
-  * `PointTransformerClassifier`: A Transformer utilizing 1D RoPE (Rotary Position Embedding) tailored for the sorted sequences.
-  * `GlobalMLPClassifier`: A baseline MLP utilizing Fourier Feature mapping.
-* **`train.py`**: The main training loop with full Weights & Biases (W&B) integration, gradient tracking, and evaluation metrics.
-* **`init_sweep.py`**: Generates isolated W&B Bayesian hyperparameter sweeps for both Lexicographical and Hilbert datasets.
-* **`run_sweep.sbatch`**: The Slurm batch script to spin up parallel GPU workers for the W&B sweeps.
-* **`util.py`**: Helper classes (like `IOStream`) for local file logging.
+Your directory structure must look exactly like this:
 
-## 🚀 Quick Start
-
-### 1. Data Generation
-You need the base `modelnet40_ply_hdf5_2048` dataset in the `data/` folder first. Run the creation script to generate the canonicalized versions:
-
-    python create_data.py
-
-This will create `data/modelnet40_lex_hdf5_2048` and `data/modelnet40_hilbert_hdf5_2048`.
-
-### 2. Verify Orderings (Optional)
-To visualize how the points are ordered, run the checker:
-
-    python check_data.py
-
-This will open your browser with an interactive 3D plot showing how the sequence flows across the geometry.
-
-### 3. Single Training Run
-To test a standard training loop locally or on a single interactive node:
-
-    python train.py --ordering hilbert --model point_transformer --epochs 150 --batch_size 32
-
-### 4. Hyperparameter Sweeps (Slurm Cluster)
-To run a full Bayesian search on both datasets:
-1. Initialize the sweeps with W&B:
-
-    python init_sweep.py
-
-2. Note the generated Sweep IDs, then launch the Slurm arrays:
-
-    sbatch --job-name=lex_sweep run_sweep.sbatch <LEX_SWEEP_ID>
-    sbatch --job-name=hilb_sweep run_sweep.sbatch <HILBERT_SWEEP_ID>
+```text
+~/data/modelnet40_ply_hdf5_2048$ ls
+fps_cache                     ply_data_test1.h5             ply_data_train_0_id2file.json  ply_data_train2.h5             ply_data_train_3_id2file.json  shape_names.txt
+ply_data_test0.h5             ply_data_test_1_id2file.json  ply_data_train1.h5             ply_data_train_2_id2file.json  ply_data_train4.h5             test_files.txt
+ply_data_test_0_id2file.json  ply_data_train0.h5            ply_data_train_1_id2file.json  ply_data_train3.h5             ply_data_train_4_id2file.json  train_files.txt

@@ -296,9 +296,9 @@ def test(args, io):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Pre-ordered Point Cloud Recognition')
-    parser.add_argument('--exp_name', type=str, default='exp', metavar='N', help='Name of the experiment')
+    parser.add_argument('--exp_name', type=str, default='Best_MLP_Hilbert', metavar='N', help='Name of the experiment')
 
-    parser.add_argument('--ordering', type=str, default='ply', choices=['lex', 'hilbert', 'ply', 'pca'],
+    parser.add_argument('--ordering', type=str, default='hilbert', choices=['lex', 'hilbert', 'ply', 'pca'],
                         help='Which canonical dataset to load')
     parser.add_argument('--model', type=str, default='global_mlp', choices=['global_mlp', 'point_transformer'],
                         help='Model to use')
@@ -326,31 +326,31 @@ if __name__ == "__main__":
     parser.add_argument('--drop_path_rate', type=float, default=0.1, help='Stochastic depth rate')
 
     # --- Global MLP Hyperparameters ---
-    parser.add_argument('--num_bands', type=int, default=4, help='Number of Fourier bands for Global MLP')
-    parser.add_argument('--fourier_scale', type=float, default=10.0,
+    parser.add_argument('--num_bands', type=int, default=3, help='Number of Fourier bands for Global MLP')
+    parser.add_argument('--fourier_scale', type=float, default=0.1,
                         help='Scale for Random Fourier Features')
 
     # --- Standard Hyperparameters ---
-    parser.add_argument('--batch_size', type=int, default=32, metavar='batch_size', help='Size of batch')
+    parser.add_argument('--batch_size', type=int, default=256, metavar='batch_size', help='Size of batch')
     parser.add_argument('--test_batch_size', type=int, default=16, metavar='batch_size', help='Size of batch')
-    parser.add_argument('--epochs', type=int, default=250, metavar='N', help='number of episodes to train')
+    parser.add_argument('--epochs', type=int, default=100, metavar='N', help='number of episodes to train')
     parser.add_argument('--optimizer', type=str, default='adamw', choices=['adam', 'adamw', 'sgd'],
                         help='Optimizer to use')
     parser.add_argument('--use_sgd', type=str2bool, nargs='?', const=True, default=False,
                         help='Use SGD (Default is Adam)')
-    parser.add_argument('--lr', type=float, default=0.001, metavar='LR', help='learning rate')
+    parser.add_argument('--lr', type=float, default=0.0009614328324244756, metavar='LR', help='learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, metavar='M', help='SGD momentum (default: 0.9)')
-    parser.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay for the optimizer')
-    parser.add_argument('--label_smoothing', type=float, default=0.0,
+    parser.add_argument('--weight_decay', type=float, default=0.01, help='Weight decay for the optimizer')
+    parser.add_argument('--label_smoothing', type=float, default=0.2,
                         help='Label smoothing epsilon for cross entropy loss')
-    parser.add_argument('--dropout', type=float, default=0.1, help='dropout rate')
+    parser.add_argument('--dropout', type=float, default=0.3, help='dropout rate')
 
     # --- System ---
     parser.add_argument('--dataset', type=str, default='modelnet40', choices=['modelnet40'])
     parser.add_argument('--num_points', type=int, default=1024, help='num of points to use')
     parser.add_argument('--eval', type=str2bool, nargs='?', const=True, default=False, help='evaluate the model')
     parser.add_argument('--no_cuda', type=str2bool, nargs='?', const=True, default=False, help='enables CUDA training')
-    parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
+    parser.add_argument('--seed', type=int, default=4, metavar='S', help='random seed (default: 4)')
     parser.add_argument('--model_path', type=str, default='', metavar='N', help='Pretrained model path')
 
     args = parser.parse_args()

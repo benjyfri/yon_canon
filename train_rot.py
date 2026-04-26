@@ -199,28 +199,49 @@ def build_loaders(args, device):
 
 # ====================== MAIN ====================== #
 
+# ====================== MAIN ====================== #
+
 def main():
     parser = argparse.ArgumentParser(description="ModelNet40 rotation/canonicalization experiment")
 
     # Core
-    parser.add_argument("--model", required=True, type=str)
+    parser.add_argument("--model", type=str, default="global_mlp")
     parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--weight_decay", type=float, default=0.0)
+    parser.add_argument("--batch_size", type=int, default=256)
+    parser.add_argument("--test_batch_size", type=int, default=16)
+    parser.add_argument("--lr", type=float, default=0.0009614328324244756)
+    parser.add_argument("--weight_decay", type=float, default=0.01)
     parser.add_argument("--num_points", type=int, default=1024)
     parser.add_argument("--val_split", type=float, default=0.1)
-    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=4)
     parser.add_argument("--num_workers", type=int, default=4)
     parser.add_argument("--save_path", type=str, default=None)
+    parser.add_argument("--model_path", type=str, default="")
+    parser.add_argument("--no_cuda", type=str2bool, default=False)
+    parser.add_argument("--eval", type=str2bool, default=False)
+
+    # Optimization & Architecture Knobs
+    parser.add_argument("--optimizer", type=str, default="adamw")
+    parser.add_argument("--use_sgd", type=str2bool, default=False)
+    parser.add_argument("--momentum", type=float, default=0.9)
+    parser.add_argument("--dropout", type=float, default=0.3)
+    parser.add_argument("--num_bands", type=int, default=3)
+    parser.add_argument("--fourier_scale", type=float, default=0.1)
+    parser.add_argument("--label_smoothing", type=float, default=0.2)
+    parser.add_argument("--trans_dim", type=int, default=216)
+    parser.add_argument("--trans_depth", type=int, default=4)
+    parser.add_argument("--trans_heads", type=int, default=6)
+    parser.add_argument("--drop_path_rate", type=float, default=0.1)
 
     # W&B
     parser.add_argument("--wandb_project", type=str, default="modelnet40-canonization")
     parser.add_argument("--disable_wandb", action="store_true")
-    parser.add_argument("--exp_name", type=str, default="default_experiment")
+    parser.add_argument("--exp_name", type=str, default="Best_MLP_Hilbert")
 
     # Dataset / sweep knobs
-    parser.add_argument("--ordering", type=str, default="lex")
+    parser.add_argument("--dataset", type=str, default="modelnet40")
+    parser.add_argument("--ordering", type=str, default="hilbert")
+    parser.add_argument("--dataset_stride", type=int, default=1)
     parser.add_argument("--use_fps", type=str2bool, default=False)
     parser.add_argument("--apply_jitter", type=str2bool, default=False)
     parser.add_argument("--apply_scale", type=str2bool, default=False)
@@ -230,16 +251,17 @@ def main():
     args = parser.parse_args()
 
     set_seed(args.seed)
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")
 
     model_map = {
         "1": Model1_PurePCA,
         "2": Model2_FrameAveraging,
         "3": Model3_Skewness,
         "4": Model4_RandomFrame,
+        # "global_mlp": GlobalMLP,  # Uncomment and map this to your actual MLP class
     }
 
-    if args.model not in model_map:
+    if args.model not in model_map and args.model != "global_mlp":
         raise ValueError(f"Invalid model '{args.model}'. Expected one of {sorted(model_map.keys())}.")
 
     use_wandb = not args.disable_wandb
@@ -268,8 +290,22 @@ def main():
 
     train_loader, val_loader, test_loader = build_loaders(args, device)
 
-    model = model_map[args.model]().to(device)
-    optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    # Initialize model (Make sure to hook up global_mlp correctly!)
+    if args.model == "global_mlp":
+        print("WARNING: 'global_mlp' chosen. Make sure it is correctly imported and initialized.")
+        # model = GlobalMLP(...).to(device)
+        model = None  # Replace this with your MLP init
+    else:
+        model = model_map[args.model]().to(device)
+
+    # Note: Added logic to use the requested optimizer setting
+    if args.optimizer.lower() == "adamw":
+        optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+    elif args.optimizer.lower() == "sgd" or args.use_sgd:
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
+    else:
+        optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+
     criterion = nn.NLLLoss()
 
     best_val_acc = -1.0
