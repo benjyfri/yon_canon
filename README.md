@@ -13,18 +13,20 @@ Your directory structure must look exactly like this:
 fps_cache                     ply_data_test1.h5             ply_data_train_0_id2file.json  ply_data_train2.h5             ply_data_train_3_id2file.json  shape_names.txt
 ply_data_test0.h5             ply_data_test_1_id2file.json  ply_data_train1.h5             ply_data_train_2_id2file.json  ply_data_train4.h5             test_files.txt
 ply_data_test_0_id2file.json  ply_data_train0.h5            ply_data_train_1_id2file.json  ply_data_train3.h5             ply_data_train_4_id2file.json  train_files.txt
+```
 🚀 Experiment 1: Effect of Canonicalization
 The main experiment evaluates a global_mlp model on the ModelNet40 dataset to measure the impact of point sequence ordering. The training script is pre-configured with optimized default hyperparameters.
 
 Local Run
 To run the main experiment locally using the optimized Hilbert ordering baseline, execute:
-
+```text
 Bash
 python train.py \
     --exp_name "Best_MLP_Hilbert_Local" \
     --epochs 100 \
     --batch_size 256 \
     --ordering "hilbert"
+```
 (Note: Parameters like learning rate, weight decay, and dropout are already set as optimal defaults in the script).
 
 🌀 Experiment 2: Rotation Study
@@ -32,7 +34,7 @@ The second experiment investigates how different canonicalization models (e.g., 
 
 Local Run
 To test a single model locally (e.g., Model 2: FrameAveraging) with rotation applied, use the following command:
-
+```text
 Bash
 python train_rot.py \
     --model 2 \
@@ -42,10 +44,12 @@ python train_rot.py \
     --lr 0.00052445 \
     --weight_decay 0.00000354 \
     --apply_rotation True
+```
 🛠️ Requirements
 Ensure you are using Python 3.13+. It is highly recommended to set up a virtual environment before installing the dependencies.
 
 To install all required packages, run:
 
+```text
 Bash
 pip install -r requirements.txt
