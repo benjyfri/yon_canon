@@ -355,7 +355,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    wandb.init(project="yon_canon_new", name=args.exp_name, config=vars(args))
+    wandb.init(project="yon_canon", name=args.exp_name, config=vars(args))
 
     # <--- DEFINED METRICS FOR BOTH EPOCH AND STEP LOGGING --->
     wandb.define_metric("epoch")
